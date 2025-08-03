@@ -2,6 +2,9 @@
 - **Always read `PLANNING.md`** at the start of a new conversation to understand the project's architecture, goals, style, and constraints.
 - **Check `TASK.md`** before starting a new task. If the task isn’t listed, add it with a brief description and today's date.
 - **Use consistent naming conventions, file structure, and architecture patterns** as described in `PLANNING.md`.
+- **Use the “No-Surprises” flow documented in ARCHITECTURE.md for end-to-end feature builds.
+- **All service calls must go through the FastAPI façade (/api/*) to enforce tool-scoped JWTs issued by the MCP server.
+- **Respect our latency SLOs: 300 ms cache-hit and 1.8 s p95 on agent calls (see SLOs.md)
 - **Use venv_linux** (the virtual environment) whenever executing Python commands, including for unit tests.
 
 ### 🧱 Code Structure & Modularity
@@ -11,10 +14,26 @@
     - `agent.py` - Main agent definition and execution logic 
     - `tools.py` - Tool functions used by the agent 
     - `prompts.py` - System prompts
+ EXAMPLE:     
+ assistio/
+  ├─ agents/            # Sub-agent definitions
+  ├─ tools/             # MCP tool wrappers
+  ├─ prompts/           # Prompt templates
+  ├─ api/               # FastAPI routes & validation
+  ├─ core/              # Orchestrator logic & validators
+  └─ infra/             # IaC configs & mcp_config.yaml
 - **Use clear, consistent imports** (prefer relative imports within packages).
 - **Use clear, consistent imports** (prefer relative imports within packages).
 - **Use python_dotenv and load_env()** for environment variables.
 
+### 🛡 Security & Compliance
+- Least-privilege for MCP tokens: each agent/tool in infra/mcp_config.yaml must list only needed scopes (e.g. search:read, llm:generate).
+
+- Proxy vendor calls through vendor_proxy/ to strip PII and enforce DPAs for TTS/SST/LLM.
+
+- Data-rights logging: code handling /export or /erase must log data_action events with userId and traceId to OpenTelemetry.
+
+- Region-locking: verify storage buckets (S3, Redis) use correct AWS regions (see COMPLIANCE.md).
 ### 🧪 Testing & Reliability
 - **Always create Pytest unit tests for new features** (functions, classes, routes, etc).
 - **After updating any logic**, check whether existing unit tests need to be updated. If so, do it.
@@ -23,7 +42,8 @@
     - 1 test for expected use
     - 1 edge case
     - 1 failure case
-
+- **E2E tests using Playwright for chat flows, interview prep, and library lookup.
+- Security scans: OWASP ZAP on PRs touching api/ or agents/.
 ### ✅ Task Completion
 - **Mark completed tasks in `TASK.md`** immediately after finishing them.
 - Add new sub-tasks or TODOs discovered during development to `TASK.md` under a “Discovered During Work” section.
@@ -46,7 +66,7 @@
           type: Description.
       """
   ```
-
+- **Logging: use structlog to emit JSON logs with timestamp, level, component, traceId, and sessionId.
 ### 📚 Documentation & Explainability
 - **Update `README.md`** when new features are added, dependencies change, or setup steps are modified.
 - **Comment non-obvious code** and ensure everything is understandable to a mid-level developer.
@@ -57,3 +77,6 @@
 - **Never hallucinate libraries or functions** – only use known, verified Python packages.
 - **Always confirm file paths and module names** exist before referencing them in code or tests.
 - **Never delete or overwrite existing code** unless explicitly instructed to or if part of a task from `TASK.md`.
+- **Cache first: sub-agents check Redis-Search before external LLM calls.
+- **Fallback logic: if GPT-4 exceeds 2 s, retry with the lightweight Llama model.
+- **Pedagogical validation: run every answer through Bloom-taxonomy validator agent before returning.
